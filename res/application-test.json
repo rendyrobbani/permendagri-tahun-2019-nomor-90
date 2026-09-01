@@ -1,0 +1,12 @@
+{
+	"peraturan": {
+		"referensi": "Peraturan Menteri Dalam Negeri Nomor 90 Tahun 2019",
+		"penetapan": "2019-10-18"
+	},
+	"database": {
+		"host": "localhost:3306",
+		"database": "permendagri_tahun_2019_nomor_90_test",
+		"username": "root",
+		"password": ""
+	}
+}

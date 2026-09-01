@@ -1,0 +1,37 @@
+{
+	"name": "rendyrobbani/permendagri-90-tahun-2019",
+	"description": "Peraturan Menteri Dalam Negeri Nomor 90 Tahun 2019 tentang Klasifikasi, Kodefikasi, dan Nomenklatur Perencanaan Pembangunan dan Keuangan Daerah",
+	"type": "library",
+	"license": "proprietary",
+	"autoload": {
+		"psr-4": {
+			"RendyRobbani\\Keuangan\\": "src/main/"
+		}
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"RendyRobbani\\Keuangan\\": "src/test/"
+		}
+	},
+	"authors": [
+		{
+			"name": "Rendy Robbani",
+			"email": "rendyrobbani17@gmail.com"
+		}
+	],
+	"repositories": [
+		{
+			"type": "vcs",
+			"url": "https://github.com/rendyrobbani/php.git"
+		}
+	],
+	"require": {
+		"php": ">=8.5",
+		"ext-pdo": "*",
+		"rendyrobbani/php": "0.0.1",
+		"phpoffice/phpspreadsheet": "^5.9"
+	},
+	"require-dev": {
+		"phpunit/phpunit": "^13.3"
+	}
+}
