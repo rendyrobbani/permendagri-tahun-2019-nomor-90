@@ -44,12 +44,12 @@ final readonly class LraServiceImpl implements LraService
 			$this->repository->deleteAll();
 
 			$cacheID = [];
-			for ($rowNum = 1; $rowNum <= $worksheet->getHighestRow(); $rowNum++) {
+			for ($rowNum = 4; $rowNum <= $worksheet->getHighestRow(); $rowNum++) {
 				echo "Reading row : " . $rowNum . PHP_EOL;
 				$reading_row = $rowNum;
 
 				$row0 = PhpSpreadsheetUtil::getCellValuesAsStringFromRow($worksheet, $rowNum, 1, 7);
-				if ($row0[0] == null || !preg_match("/^[4-6]+$/", $row0[0])) continue;
+				if ($row0[0] == null) continue;
 
 				$entity = new LraEntity();
 
@@ -105,6 +105,11 @@ final readonly class LraServiceImpl implements LraService
 
 				if (in_array($reading_row, [7003, 10774, 10842])) {
 					$entity->kodeRekening6 = "002";
+				}
+
+				if (in_array($reading_row, [9801, 9810])) {
+					$entity->kodeRekening1 = "5";
+					$entity->kodeRekening2 = "2";
 				}
 
 				if (in_array($reading_row, [11007])) {

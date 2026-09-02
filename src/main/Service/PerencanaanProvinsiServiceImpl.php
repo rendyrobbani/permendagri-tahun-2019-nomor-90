@@ -47,11 +47,11 @@ final readonly class PerencanaanProvinsiServiceImpl implements PerencanaanProvin
 			$this->repository->deleteAll();
 
 			$cacheID = [];
-			for ($rowNum = 1; $rowNum <= $worksheet->getHighestRow(); $rowNum++) {
+			for ($rowNum = 4; $rowNum <= $worksheet->getHighestRow(); $rowNum++) {
 				echo "Reading row : " . $rowNum . PHP_EOL;
 
 				$row0 = PhpSpreadsheetUtil::getCellValuesAsStringFromRow($worksheet, $rowNum, 1, 7);
-				if ($row0[0] == null || !preg_match("/^[X1-9]+$/", $row0[0])) continue;
+				if ($row0[0] == null) continue;
 
 				$entity = new PerencanaanProvinsiEntity();
 

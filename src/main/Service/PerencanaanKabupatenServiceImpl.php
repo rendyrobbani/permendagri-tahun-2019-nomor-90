@@ -47,11 +47,12 @@ final readonly class PerencanaanKabupatenServiceImpl implements PerencanaanKabup
 			$this->repository->deleteAll();
 
 			$cacheID = [];
-			for ($rowNum = 1; $rowNum <= $worksheet->getHighestRow(); $rowNum++) {
+			for ($rowNum = 4; $rowNum <= $worksheet->getHighestRow(); $rowNum++) {
 				echo "Reading row : " . $rowNum . PHP_EOL;
+				$reading_row = $rowNum;
 
 				$row0 = PhpSpreadsheetUtil::getCellValuesAsStringFromRow($worksheet, $rowNum, 1, 7);
-				if ($row0[0] == null || !preg_match("/^[X1-9]+$/", $row0[0])) continue;
+				if ($row0[0] == null) continue;
 
 				$entity = new PerencanaanKabupatenEntity();
 
@@ -70,11 +71,15 @@ final readonly class PerencanaanKabupatenServiceImpl implements PerencanaanKabup
 				$entity->isDeleted = false;
 				$entity->generateIdAndKode();
 
-				if ($entity->kode === "2.16.17.2.02.05" && $entity->nama === "Koordinasi dan Sinkronisasi Sistem Keamanan Informasi") {
+				if ($reading_row === 1406) {
 					$entity->kodeProgram = "03";
 				}
 
-				if ($entity->kode === "3.27.04.2.04" && $entity->nama === "Pengembangan Lahan Penggembalaan Umum") {
+				if ($reading_row === 1627) {
+					$entity->kodeUrusan = "2";
+				}
+
+				if ($reading_row === 1795) {
 					$entity->kodeProgram = "03";
 				}
 

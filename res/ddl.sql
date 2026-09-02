@@ -1,17 +1,7 @@
+drop database if exists permendagri_tahun_2019_nomor_90_test;
+create database permendagri_tahun_2019_nomor_90_test;
 use permendagri_tahun_2019_nomor_90_test;
 
-drop table if exists lo_log;
-drop table if exists lo;
-drop table if exists lra_log;
-drop table if exists lra;
-drop table if exists neraca_log;
-drop table if exists neraca;
-drop table if exists sumber_log;
-drop table if exists sumber;
-drop table if exists fungsi_log;
-drop table if exists fungsi;
-drop table if exists perencanaan_kabupaten_log;
-drop table if exists perencanaan_kabupaten;
 drop table if exists perencanaan_provinsi_log;
 drop table if exists perencanaan_provinsi;
 
@@ -70,6 +60,9 @@ create or replace table perencanaan_provinsi_log (
   charset = utf8mb4
   collate = utf8mb4_unicode_ci;
 
+drop table if exists perencanaan_kabupaten_log;
+drop table if exists perencanaan_kabupaten;
+
 create or replace table perencanaan_kabupaten (
     id               varchar(15),
     kode             varchar(15),
@@ -125,6 +118,9 @@ create or replace table perencanaan_kabupaten_log (
   charset = utf8mb4
   collate = utf8mb4_unicode_ci;
 
+drop table if exists fungsi_log;
+drop table if exists fungsi;
+
 create or replace table fungsi (
     id             varchar(5),
     kode           varchar(5),
@@ -170,6 +166,9 @@ create or replace table fungsi_log (
 ) engine = innodb
   charset = utf8mb4
   collate = utf8mb4_unicode_ci;
+
+drop table if exists sumber_log;
+drop table if exists sumber;
 
 create or replace table sumber (
     id             varchar(14),
@@ -229,6 +228,9 @@ create or replace table sumber_log (
   charset = utf8mb4
   collate = utf8mb4_unicode_ci;
 
+drop table if exists neraca_log;
+drop table if exists neraca;
+
 create or replace table neraca (
     id             varchar(16),
     kode           varchar(16),
@@ -287,6 +289,9 @@ create or replace table neraca_log (
   charset = utf8mb4
   collate = utf8mb4_unicode_ci;
 
+drop table if exists lra_log;
+drop table if exists lra;
+
 create or replace table lra (
     id             varchar(16),
     kode           varchar(16),
@@ -344,6 +349,9 @@ create or replace table lra_log (
 ) engine = innodb
   charset = utf8mb4
   collate = utf8mb4_unicode_ci;
+
+drop table if exists lo_log;
+drop table if exists lo;
 
 create or replace table lo (
     id             varchar(16),

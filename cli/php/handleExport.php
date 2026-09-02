@@ -17,7 +17,7 @@ use RendyRobbani\PHP\Application;
 
 require_once __DIR__ . "/../../vendor/autoload.php";
 
-Application::setConfig(__DIR__ . "/../res/application-test.json");
+Application::setConfig(__DIR__ . "/../../res/application-test.json");
 
 /** @var DefaultService[] $services */
 $services = [];
@@ -36,6 +36,6 @@ for ($i = 0; $i < sizeof($services); $i++) {
 	$services[$i]->intoXlsx($i === 0 ? $spreadsheet->getActiveSheet() : $spreadsheet->createSheet());
 }
 
-$filename = __DIR__ . "/../rel/permendagri-tahun-2019-nomor-90.xlsx";
+$filename = __DIR__ . "/../../rel/permendagri-tahun-2019-nomor-90.xlsx";
 if (!file_exists(dirname($filename))) mkdir(dirname($filename), 0777, true);
 new Xlsx($spreadsheet)->save($filename);
