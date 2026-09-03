@@ -8,6 +8,8 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use RendyRobbani\Keuangan\Entity\SumberEntity;
+use RendyRobbani\Keuangan\Entity\SumberLogEntity;
+use RendyRobbani\Keuangan\Exception\RekeningExistsException;
 use RendyRobbani\Keuangan\Exception\RekeningNotFoundException;
 use RendyRobbani\Keuangan\Repository\SumberLogRepository;
 use RendyRobbani\Keuangan\Repository\SumberRepository;
@@ -41,107 +43,154 @@ final readonly class SumberServiceImpl implements SumberService
 			$this->connection->beginTransaction();
 
 			$this->repository->deleteAll();
+			$this->logRepository->deleteAll();
 
-			$cacheID = [];
+			/** @var array<string, SumberEntity> $intoEntities */
+			$intoEntities = [];
+
+			/** @var SumberLogEntity[] $logEntities */
+			$logEntities = [];
+
 			for ($rowNum = 4; $rowNum <= $worksheet->getHighestRow(); $rowNum++) {
 				echo "Reading row : " . $rowNum . PHP_EOL;
 
-				$row0 = PhpSpreadsheetUtil::getCellValuesAsStringFromRow($worksheet, $rowNum, 1, 7);
-				if ($row0[0] == null) continue;
+				$rowValues = PhpSpreadsheetUtil::getCellValuesAsStringFromRow($worksheet, $rowNum, 1, 7);
+				$rowChecks = array_map(fn($value) => $value === null || trim($value) === "" ? 0 : 1, $rowValues);
+				$rowChecks = array_sum($rowChecks);
+				if ($rowChecks === 0) continue;
 
-				$entity = new SumberEntity();
-
-				$entity->kodeRekening1 = $row0[0];
-				$entity->kodeRekening2 = $row0[1] ?? null;
-				$entity->kodeRekening3 = $row0[2] ?? null;
-				$entity->kodeRekening4 = $row0[3] ?? null;
-				$entity->kodeRekening5 = $row0[4] ?? null;
-				$entity->kodeRekening6 = $row0[5] ?? null;
-				$entity->nama = $row0[6] ?? null;
-				$entity->createdAt = $this->penetapan;
-				$entity->createdBy = $this->referensi;
-				$entity->isDeleted = false;
-				$entity->generateIdAndKode();
-
-				$rowNum1 = $rowNum;
-				while (true) {
-					$rowNum1++;
-					$row1 = $rowNum1 <= $worksheet->getHighestRow() ? PhpSpreadsheetUtil::getCellValuesAsStringFromRow($worksheet, $rowNum1, 1, 7) : [];
-					$nextKode = $row1[0] ?? null;
-					$nextNama = $row1[6] ?? null;
-					if ($nextKode == null && $nextNama != null) {
-						if (str_starts_with(trim(strtolower($nextNama)), "digunakan")) {
-							$entity->keterangan = $nextNama;
-						} elseif ($entity->keterangan != null) {
-							$entity->keterangan = PhpSpreadsheetUtil::cleanValue(implode(" ", [$entity->keterangan, $nextNama]));
-						} else {
-							$nama = $entity->nama == null ? $entity->nama : PhpSpreadsheetUtil::cleanValue(implode(" ", [$entity->nama, $nextNama]));
-							$entity->nama = $nama;
-						}
-					} else {
-						break;
+				$intoEntity = new SumberEntity();
+				for ($i = 0; $i < 7; $i++) {
+					$value = $rowValues[$i];
+					switch ($i + 1) {
+						case 1:
+							$intoEntity->kodeRekening1 = $value;
+							break;
+						case 2:
+							$intoEntity->kodeRekening2 = $value;
+							break;
+						case 3:
+							$intoEntity->kodeRekening3 = $value;
+							break;
+						case 4:
+							$intoEntity->kodeRekening4 = $value;
+							break;
+						case 5:
+							$intoEntity->kodeRekening5 = $value;
+							break;
+						case 6:
+							$intoEntity->kodeRekening6 = $value;
+							break;
+						case 7:
+							$intoEntity->nama = $value;
+							break;
 					}
 				}
-				$rowNum = $rowNum1 - 1;
+				$intoEntity->createdAt = $this->penetapan;
+				$intoEntity->createdBy = $this->referensi;
+				$intoEntity->isDeleted = false;
+				$intoEntity->generateIdAndKode();
 
-				if ($entity->keterangan !== null && $entity->keterangan !== "" && !str_ends_with($entity->keterangan, ".")) {
-					$entity->keterangan .= ".";
-				}
-
-				$splitID = [];
-				$splitID[] = $entity->kodeRekening1;
-				if ($entity->kodeRekening2 !== null) {
-					$splitID[] = $entity->kodeRekening2;
-					if ($entity->kodeRekening3 !== null) {
-						$splitID[] = $entity->kodeRekening3;
-						if ($entity->kodeRekening4 !== null) {
-							$splitID[] = $entity->kodeRekening4;
-							if ($entity->kodeRekening5 !== null) {
-								$splitID[] = $entity->kodeRekening5;
-								if ($entity->kodeRekening6 !== null) {
-									$splitID[] = $entity->kodeRekening6;
-								}
+				if (isset($nextRowNum)) unset($nextRowNum);
+				while (true) {
+					$nextRowNum = ($nextRowNum ?? $rowNum) + 1;
+					$nextRowValues = $nextRowNum <= $worksheet->getHighestRow() ? PhpSpreadsheetUtil::getCellValuesAsStringFromRow($worksheet, $nextRowNum, 1, 7) : [];
+					$nextRowChecks = array_map(fn($value) => $value === null || trim($value) === "" ? 0 : 1, $nextRowValues);
+					$nextRowChecks = array_slice($nextRowChecks, 0, 6);
+					$nextRowChecks = array_sum($nextRowChecks);
+					$nextNama = $nextRowValues[6] ?? null;
+					if ($nextRowChecks > 0 || $nextNama === null) break;
+					else {
+						if ($intoEntity->keterangan !== null) $intoEntity->keterangan = PhpSpreadsheetUtil::cleanValue($intoEntity->keterangan . " " . $nextNama);
+						else {
+							if (str_starts_with(trim(strtolower($nextNama)), "digunakan")) {
+								$intoEntity->keterangan = $nextNama;
+							} else {
+								$intoEntity->nama = PhpSpreadsheetUtil::cleanValue($intoEntity->nama . " " . $nextNama);
 							}
 						}
 					}
 				}
 
-				for ($level = 1; $level <= sizeof($splitID); $level++) {
-					$checkID = implode(".", array_slice($splitID, 0, $level));
-					if ($entity->kode != $checkID && !in_array($checkID, $cacheID)) {
-						switch ($level) {
+				if ($intoEntity->keterangan !== null) {
+					$intoEntity->keterangan = ucfirst($intoEntity->keterangan);
+					if (!str_ends_with($intoEntity->keterangan, ".")) {
+						$intoEntity->keterangan .= ".";
+					}
+				}
+
+				$level = sizeof(explode(".", $intoEntity->kode));
+
+				for ($i = 1; $i <= $level; $i++) {
+					$kode = [];
+					if ($i >= 1) $kode[] = $intoEntity->kodeRekening1;
+					if ($i >= 2) $kode[] = $intoEntity->kodeRekening2;
+					if ($i >= 3) $kode[] = $intoEntity->kodeRekening3;
+					if ($i >= 4) $kode[] = $intoEntity->kodeRekening4;
+					if ($i >= 5) $kode[] = $intoEntity->kodeRekening5;
+					if ($i >= 6) $kode[] = $intoEntity->kodeRekening6;
+
+					$kode = implode(".", $kode);
+
+					if ($i < $level) {
+						if (isset($intoEntities[$kode])) continue;
+						else {
+							switch ($i) {
+								case 1:
+									throw new RekeningNotFoundException(RekeningNotFoundException::SUMBER_DANA, RekeningNotFoundException::LEVEL_1, $kode);
+								case 2:
+									throw new RekeningNotFoundException(RekeningNotFoundException::SUMBER_DANA, RekeningNotFoundException::LEVEL_2, $kode);
+								case 3:
+									throw new RekeningNotFoundException(RekeningNotFoundException::SUMBER_DANA, RekeningNotFoundException::LEVEL_3, $kode);
+								case 4:
+									throw new RekeningNotFoundException(RekeningNotFoundException::SUMBER_DANA, RekeningNotFoundException::LEVEL_4, $kode);
+								case 5:
+									throw new RekeningNotFoundException(RekeningNotFoundException::SUMBER_DANA, RekeningNotFoundException::LEVEL_5, $kode);
+								case 6:
+									throw new RekeningNotFoundException(RekeningNotFoundException::SUMBER_DANA, RekeningNotFoundException::LEVEL_6, $kode);
+							}
+						}
+					}
+
+					if (isset($intoEntities[$kode])) {
+						switch ($i) {
 							case 1:
-								throw new RekeningNotFoundException(RekeningNotFoundException::SUMBER_DANA, RekeningNotFoundException::LEVEL_1, $checkID);
+								throw new RekeningExistsException(RekeningExistsException::SUMBER_DANA, RekeningExistsException::LEVEL_1, $kode);
 							case 2:
-								throw new RekeningNotFoundException(RekeningNotFoundException::SUMBER_DANA, RekeningNotFoundException::LEVEL_2, $checkID);
+								throw new RekeningExistsException(RekeningExistsException::SUMBER_DANA, RekeningExistsException::LEVEL_2, $kode);
 							case 3:
-								throw new RekeningNotFoundException(RekeningNotFoundException::SUMBER_DANA, RekeningNotFoundException::LEVEL_3, $checkID);
+								throw new RekeningExistsException(RekeningExistsException::SUMBER_DANA, RekeningExistsException::LEVEL_3, $kode);
 							case 4:
-								throw new RekeningNotFoundException(RekeningNotFoundException::SUMBER_DANA, RekeningNotFoundException::LEVEL_4, $checkID);
+								throw new RekeningExistsException(RekeningExistsException::SUMBER_DANA, RekeningExistsException::LEVEL_4, $kode);
 							case 5:
-								throw new RekeningNotFoundException(RekeningNotFoundException::SUMBER_DANA, RekeningNotFoundException::LEVEL_5, $checkID);
+								throw new RekeningExistsException(RekeningExistsException::SUMBER_DANA, RekeningExistsException::LEVEL_5, $kode);
 							case 6:
-								throw new RekeningNotFoundException(RekeningNotFoundException::SUMBER_DANA, RekeningNotFoundException::LEVEL_6, $checkID);
+								throw new RekeningExistsException(RekeningExistsException::SUMBER_DANA, RekeningExistsException::LEVEL_6, $kode);
 						}
 					}
 				}
 
-				$logEntity = $entity->log();
+				$intoEntities[$intoEntity->kode] = $intoEntity;
+
+				$logEntity = $intoEntity->log();
 				$logEntity->loggedAt = $this->penetapan;
 				$logEntity->loggedBy = $this->referensi;
+				$logEntities[] = $logEntity;
 
-				$cacheID[] = $entity->kode;
-				$this->repository->save($entity);
-				$this->logRepository->save($logEntity);
+				if (isset($nextRowNum)) $rowNum = max($rowNum, $nextRowNum - 1);
 			}
+
+			foreach ($intoEntities as $entity) $this->repository->save($entity);
+			foreach ($logEntities as $entity) $this->logRepository->save($entity);
+
 			$this->connection->commit();
 		} catch (\Throwable $exception) {
 			$this->connection->rollBack();
-			if (isset($entity)) {
+			if ($entity = $entity ?? $intoEntity ?? false) {
+				echo PHP_EOL;
 				echo "kode : " . $entity->kode . PHP_EOL;
 				echo "nama : " . $entity->nama . PHP_EOL;
-				echo "len-nama : " . ($entity->nama === null ? 0 : strlen($entity->nama)) . PHP_EOL;
-				echo "len-keterangan : " . ($entity->keterangan === null ? 0 : strlen($entity->keterangan)) . PHP_EOL;
+				echo PHP_EOL;
 			}
 			throw $exception;
 		}

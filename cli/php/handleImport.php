@@ -15,10 +15,10 @@ use RendyRobbani\PHP\Application;
 require_once __DIR__ . "/../../vendor/autoload.php";
 
 Application::setConfig(__DIR__ . "/../../res/application-test.json");
-Application::getComponent(PerencanaanProvinsiService::class)->fromXlsx((new Xlsx()->load(__DIR__ . "/../xlsx/Perencanaan-Provinsi.xlsx"))->getActiveSheet());
-Application::getComponent(PerencanaanKabupatenService::class)->fromXlsx((new Xlsx()->load(__DIR__ . "/../xlsx/Perencanaan-Kabupaten.xlsx"))->getActiveSheet());
-Application::getComponent(FungsiService::class)->fromXlsx((new Xlsx()->load(__DIR__ . "/../xlsx/Fungsi.xlsx"))->getActiveSheet());
-Application::getComponent(SumberService::class)->fromXlsx((new Xlsx()->load(__DIR__ . "/../xlsx/Sumber.xlsx"))->getActiveSheet());
-Application::getComponent(NeracaService::class)->fromXlsx((new Xlsx()->load(__DIR__ . "/../xlsx/Neraca.xlsx"))->getActiveSheet());
-Application::getComponent(LraService::class)->fromXlsx((new Xlsx()->load(__DIR__ . "/../xlsx/LRA.xlsx"))->getActiveSheet());
-Application::getComponent(LoService::class)->fromXlsx((new Xlsx()->load(__DIR__ . "/../xlsx/LO.xlsx"))->getActiveSheet());
+Application::getComponent(PerencanaanProvinsiService::class)->fromXlsx(new Xlsx()->load(__DIR__ . "/../xlsx/Perencanaan-Provinsi.xlsx")->getActiveSheet());
+Application::getComponent(PerencanaanKabupatenService::class)->fromXlsx(new Xlsx()->load(__DIR__ . "/../xlsx/Perencanaan-Kabupaten.xlsx")->getActiveSheet());
+Application::getComponent(FungsiService::class)->fromXlsx(new Xlsx()->load(__DIR__ . "/../xlsx/Fungsi.xlsx")->getActiveSheet());
+Application::getComponent(SumberService::class)->fromXlsx(new Xlsx()->load(__DIR__ . "/../xlsx/Sumber.xlsx")->getActiveSheet());
+Application::getComponent(NeracaService::class)->fromXlsx(new Xlsx()->load(__DIR__ . "/../xlsx/Neraca.xlsx")->getActiveSheet());
+Application::getComponent(LraService::class)->fromXlsx(new Xlsx()->load(__DIR__ . "/../xlsx/LRA.xlsx")->getActiveSheet());
+Application::getComponent(LoService::class)->fromXlsx(new Xlsx()->load(__DIR__ . "/../xlsx/LO.xlsx")->getActiveSheet());

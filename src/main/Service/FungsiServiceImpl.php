@@ -8,7 +8,10 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use RendyRobbani\Keuangan\Entity\FungsiEntity;
+use RendyRobbani\Keuangan\Entity\FungsiLogEntity;
+use RendyRobbani\Keuangan\Exception\FungsiExistsException;
 use RendyRobbani\Keuangan\Exception\FungsiNotFoundException;
+use RendyRobbani\Keuangan\Exception\SubfungsiExistsException;
 use RendyRobbani\Keuangan\Exception\SubfungsiNotFoundException;
 use RendyRobbani\Keuangan\Repository\FungsiLogRepository;
 use RendyRobbani\Keuangan\Repository\FungsiRepository;
@@ -42,81 +45,95 @@ final readonly class FungsiServiceImpl implements FungsiService
 			$this->connection->beginTransaction();
 
 			$this->repository->deleteAll();
+			$this->logRepository->deleteAll();
 
-			$cacheID = [];
+			/** @var array<string, FungsiEntity> $intoEntities */
+			$intoEntities = [];
+
+			/** @var FungsiLogEntity[] $logEntities */
+			$logEntities = [];
+
 			for ($rowNum = 4; $rowNum <= $worksheet->getHighestRow(); $rowNum++) {
 				echo "Reading row : " . $rowNum . PHP_EOL;
 
-				$row0 = PhpSpreadsheetUtil::getCellValuesAsStringFromRow($worksheet, $rowNum, 1, 3);
-				if ($row0[0] == null) continue;
+				$rowValues = PhpSpreadsheetUtil::getCellValuesAsStringFromRow($worksheet, $rowNum, 1, 3);
+				$rowChecks = array_map(fn($value) => $value === null || trim($value) === "" ? 0 : 1, $rowValues);
+				$rowChecks = array_sum($rowChecks);
+				if ($rowChecks === 0) continue;
 
-				$entity = new FungsiEntity();
-
-				$entity->kodeFungsi = $row0[0];
-				$entity->kodeFungsi = $entity->kodeFungsi == null ? null : strtoupper($entity->kodeFungsi);
-
-				$entity->kodeSubfungsi = $row0[1] ?? null;
-				$entity->kodeSubfungsi = $entity->kodeSubfungsi == null ? null : strtoupper($entity->kodeSubfungsi);
-
-				$entity->nama = $row0[2] ?? null;
-				$entity->createdAt = $this->penetapan;
-				$entity->createdBy = $this->referensi;
-				$entity->isDeleted = false;
-				$entity->generateIdAndKode();
-
-				$rowNum1 = $rowNum;
-				while (true) {
-					$rowNum1++;
-					$row1 = $rowNum1 <= $worksheet->getHighestRow() ? PhpSpreadsheetUtil::getCellValuesAsStringFromRow($worksheet, $rowNum1, 1, 3) : [];
-					$nextKode = $row1[0] ?? null;
-					$nextNama = $row1[2] ?? null;
-					if ($nextKode == null && $nextNama != null) {
-						if (str_starts_with(trim(strtolower($nextNama)), "tidak ada kewenangan")) {
-							$entity->keterangan = $nextNama;
-						} else {
-							$nama = $entity->nama === null ? $entity->nama : PhpSpreadsheetUtil::cleanValue(implode(" ", [$entity->nama, $nextNama]));
-							$entity->nama = $nama;
-						}
-					} else {
-						break;
+				$intoEntity = new FungsiEntity();
+				for ($i = 0; $i < 3; $i++) {
+					$value = $rowValues[$i];
+					if ($i < 2 && $value !== null) $value = strtoupper($value);
+					switch ($i + 1) {
+						case 1:
+							$intoEntity->kodeFungsi = $value;
+							break;
+						case 2:
+							$intoEntity->kodeSubfungsi = $value;
+							break;
+						case 3:
+							$intoEntity->nama = $value;
+							break;
 					}
 				}
-				$rowNum = $rowNum1 - 1;
+				$intoEntity->createdAt = $this->penetapan;
+				$intoEntity->createdBy = $this->referensi;
+				$intoEntity->isDeleted = false;
+				$intoEntity->generateIdAndKode();
 
-				$splitID = [];
-				$splitID[] = $entity->kodeFungsi;
-				if ($entity->kodeSubfungsi !== null) {
-					$splitID[] = $entity->kodeSubfungsi;
-				}
+				$level = sizeof(explode(".", $intoEntity->kode));
 
-				for ($level = 1; $level <= sizeof($splitID); $level++) {
-					$checkID = implode(".", array_slice($splitID, 0, $level));
-					if ($entity->kode != $checkID && !in_array($checkID, $cacheID)) {
-						switch ($level) {
+				for ($i = 1; $i <= $level; $i++) {
+					$kode = [];
+					if ($i >= 1) $kode[] = $intoEntity->kodeFungsi;
+					if ($i >= 2) $kode[] = $intoEntity->kodeSubfungsi;
+
+					$kode = implode(".", $kode);
+
+					if ($i < $level) {
+						if (isset($intoEntities[$kode])) continue;
+						else {
+							switch ($i) {
+								case 1:
+									throw new FungsiNotFoundException($kode);
+								case 2:
+									throw new SubfungsiNotFoundException($kode);
+							}
+						}
+					}
+
+					if (isset($intoEntities[$kode])) {
+						switch ($i) {
 							case 1:
-								throw new FungsiNotFoundException($checkID);
+								throw new FungsiExistsException($kode);
 							case 2:
-								throw new SubfungsiNotFoundException($checkID);
+								throw new SubfungsiExistsException($kode);
 						}
 					}
 				}
 
-				$logEntity = $entity->log();
+				$intoEntities[$intoEntity->kode] = $intoEntity;
+
+				$logEntity = $intoEntity->log();
 				$logEntity->loggedAt = $this->penetapan;
 				$logEntity->loggedBy = $this->referensi;
+				$logEntities[] = $logEntity;
 
-				$cacheID[] = $entity->kode;
-				$this->repository->save($entity);
-				$this->logRepository->save($logEntity);
+				if (isset($nextRowNum)) $rowNum = max($rowNum, $nextRowNum - 1);
 			}
+
+			foreach ($intoEntities as $entity) $this->repository->save($entity);
+			foreach ($logEntities as $entity) $this->logRepository->save($entity);
+
 			$this->connection->commit();
 		} catch (\Throwable $exception) {
 			$this->connection->rollBack();
-			if (isset($entity)) {
+			if ($entity = $entity ?? $intoEntity ?? false) {
+				echo PHP_EOL;
 				echo "kode : " . $entity->kode . PHP_EOL;
 				echo "nama : " . $entity->nama . PHP_EOL;
-				echo "len-nama : " . ($entity->nama === null ? 0 : strlen($entity->nama)) . PHP_EOL;
-				echo "len-keterangan : " . ($entity->keterangan === null ? 0 : strlen($entity->keterangan)) . PHP_EOL;
+				echo PHP_EOL;
 			}
 			throw $exception;
 		}

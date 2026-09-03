@@ -8,10 +8,16 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use RendyRobbani\Keuangan\Entity\PerencanaanKabupatenEntity;
+use RendyRobbani\Keuangan\Entity\PerencanaanKabupatenLogEntity;
+use RendyRobbani\Keuangan\Exception\BidangExistsException;
 use RendyRobbani\Keuangan\Exception\BidangNotFoundException;
+use RendyRobbani\Keuangan\Exception\KegiatanExistsException;
 use RendyRobbani\Keuangan\Exception\KegiatanNotFoundException;
+use RendyRobbani\Keuangan\Exception\ProgramExistsException;
 use RendyRobbani\Keuangan\Exception\ProgramNotFoundException;
+use RendyRobbani\Keuangan\Exception\SubkegiatanExistsException;
 use RendyRobbani\Keuangan\Exception\SubkegiatanNotFoundException;
+use RendyRobbani\Keuangan\Exception\UrusanExistsException;
 use RendyRobbani\Keuangan\Exception\UrusanNotFoundException;
 use RendyRobbani\Keuangan\Repository\PerencanaanKabupatenLogRepository;
 use RendyRobbani\Keuangan\Repository\PerencanaanKabupatenRepository;
@@ -45,114 +51,160 @@ final readonly class PerencanaanKabupatenServiceImpl implements PerencanaanKabup
 			$this->connection->beginTransaction();
 
 			$this->repository->deleteAll();
+			$this->logRepository->deleteAll();
 
-			$cacheID = [];
+			/** @var array<string, PerencanaanKabupatenEntity> $intoEntities */
+			$intoEntities = [];
+
+			/** @var PerencanaanKabupatenLogEntity[] $logEntities */
+			$logEntities = [];
+
 			for ($rowNum = 4; $rowNum <= $worksheet->getHighestRow(); $rowNum++) {
-				echo "Reading row : " . $rowNum . PHP_EOL;
-				$reading_row = $rowNum;
+				echo "Reading row  : " . $rowNum . PHP_EOL;
 
-				$row0 = PhpSpreadsheetUtil::getCellValuesAsStringFromRow($worksheet, $rowNum, 1, 7);
-				if ($row0[0] == null) continue;
+				$rowValues = PhpSpreadsheetUtil::getCellValuesAsStringFromRow($worksheet, $rowNum, 1, 6);
+				$rowChecks = array_map(fn($value) => $value === null || trim($value) === "" ? 0 : 1, $rowValues);
+				$rowChecks = array_sum($rowChecks);
+				if ($rowChecks === 0) continue;
 
-				$entity = new PerencanaanKabupatenEntity();
-
-				$entity->kodeUrusan = $row0[0];
-				$entity->kodeUrusan = $entity->kodeUrusan == null ? null : strtoupper($entity->kodeUrusan);
-
-				$entity->kodeBidang = $row0[1] ?? null;
-				$entity->kodeBidang = $entity->kodeBidang == null ? null : strtoupper($entity->kodeBidang);
-
-				$entity->kodeProgram = $row0[2] ?? null;
-				$entity->kodeKegiatan = $row0[3] ?? null;
-				$entity->kodeSubkegiatan = $row0[4] ?? null;
-				$entity->nama = $row0[5] ?? null;
-				$entity->createdAt = $this->penetapan;
-				$entity->createdBy = $this->referensi;
-				$entity->isDeleted = false;
-				$entity->generateIdAndKode();
-
-				if ($reading_row === 1406) {
-					$entity->kodeProgram = "03";
-				}
-
-				if ($reading_row === 1627) {
-					$entity->kodeUrusan = "2";
-				}
-
-				if ($reading_row === 1795) {
-					$entity->kodeProgram = "03";
-				}
-
-				$entity->generateIdAndKode();
-
-				$rowNum1 = $rowNum;
-				while (true) {
-					$rowNum1++;
-					$row1 = $rowNum1 <= $worksheet->getHighestRow() ? PhpSpreadsheetUtil::getCellValuesAsStringFromRow($worksheet, $rowNum1, 1, 7) : [];
-					$nextKode = $row1[0] ?? null;
-					$nextNama = $row1[5] ?? null;
-					if ($nextKode == null && $nextNama != null) {
-						if (str_starts_with(trim(strtolower($nextNama)), "tidak ada kewenangan")) {
-							$entity->keterangan = $nextNama;
-						} else {
-							$nama = $entity->nama === null ? $entity->nama : PhpSpreadsheetUtil::cleanValue(implode(" ", [$entity->nama, $nextNama]));
-							$entity->nama = $nama;
-						}
-					} else {
-						break;
+				$intoEntity = new PerencanaanKabupatenEntity();
+				for ($i = 0; $i < 6; $i++) {
+					$value = $rowValues[$i];
+					if ($i < 2 && $value !== null) $value = strtoupper($value);
+					switch ($i + 1) {
+						case 1:
+							$intoEntity->kodeUrusan = $value;
+							break;
+						case 2:
+							$intoEntity->kodeBidang = $value;
+							break;
+						case 3:
+							$intoEntity->kodeProgram = $value;
+							break;
+						case 4:
+							$intoEntity->kodeKegiatan = $value;
+							break;
+						case 5:
+							$intoEntity->kodeSubkegiatan = $value;
+							break;
+						case 6:
+							$intoEntity->nama = $value;
+							break;
 					}
 				}
-				$rowNum = $rowNum1 - 1;
+				$intoEntity->createdAt = $this->penetapan;
+				$intoEntity->createdBy = $this->referensi;
+				$intoEntity->isDeleted = false;
+				$intoEntity->generateIdAndKode();
 
-				$splitID = [];
-				$splitID[] = $entity->kodeUrusan;
-				if ($entity->kodeBidang !== null) {
-					$splitID[] = $entity->kodeBidang;
-					if ($entity->kodeProgram !== null) {
-						$splitID[] = $entity->kodeProgram;
-						if ($entity->kodeKegiatan !== null) {
-							$splitID[] = $entity->kodeKegiatan;
-							if ($entity->kodeSubkegiatan !== null) {
-								$splitID[] = $entity->kodeSubkegiatan;
+				if (isset($nextRowNum)) unset($nextRowNum);
+				while (true) {
+					$nextRowNum = ($nextRowNum ?? $rowNum) + 1;
+					$nextRowValues = $nextRowNum <= $worksheet->getHighestRow() ? PhpSpreadsheetUtil::getCellValuesAsStringFromRow($worksheet, $nextRowNum, 1, 6) : [];
+					$nextRowChecks = array_map(fn($value) => $value === null || trim($value) === "" ? 0 : 1, $nextRowValues);
+					$nextRowChecks = array_slice($nextRowChecks, 0, 5);
+					$nextRowChecks = array_sum($nextRowChecks);
+					$nextNama = $nextRowValues[5] ?? null;
+					if ($nextRowChecks > 0 || $nextNama === null) break;
+					else {
+						if ($intoEntity->keterangan !== null) $intoEntity->keterangan = PhpSpreadsheetUtil::cleanValue($intoEntity->keterangan . " " . $nextNama);
+						else {
+							if (str_starts_with(trim(strtolower($nextNama)), "tidak ada kewenangan")) {
+								$intoEntity->keterangan = $nextNama;
+							} else {
+								$intoEntity->nama = PhpSpreadsheetUtil::cleanValue($intoEntity->nama . " " . $nextNama);
 							}
 						}
 					}
 				}
 
-				for ($level = 1; $level <= sizeof($splitID); $level++) {
-					$checkID = implode(".", array_slice($splitID, 0, $level));
-					if ($entity->kode != $checkID && !in_array($checkID, $cacheID)) {
-						switch ($level) {
+				if ($rowNum === 1406) {
+					$intoEntity->kodeProgram = "03";
+				}
+
+				if ($rowNum === 1627) {
+					$intoEntity->kodeUrusan = "2";
+				}
+
+				if ($rowNum === 1795) {
+					$intoEntity->kodeProgram = "03";
+				}
+
+				$intoEntity->generateIdAndKode();
+
+				$level = match (sizeof(explode(".", $intoEntity->kode))) {
+					1 => 1,
+					2 => 2,
+					3 => 3,
+					5 => 4,
+					6 => 5,
+				};
+
+				for ($i = 1; $i <= $level; $i++) {
+					$kode = [];
+					if ($i >= 1) $kode[] = $intoEntity->kodeUrusan;
+					if ($i >= 2) $kode[] = $intoEntity->kodeBidang;
+					if ($i >= 3) $kode[] = $intoEntity->kodeProgram;
+					if ($i >= 4) $kode[] = $intoEntity->kodeKegiatan;
+					if ($i >= 5) $kode[] = $intoEntity->kodeSubkegiatan;
+
+					$kode = implode(".", $kode);
+
+					if ($i < $level) {
+						if (isset($intoEntities[$kode])) continue;
+						else {
+							switch ($i) {
+								case 1:
+									throw new UrusanNotFoundException($kode);
+								case 2:
+									throw new BidangNotFoundException($kode);
+								case 3:
+									throw new ProgramNotFoundException($kode);
+								case 4:
+									throw new KegiatanNotFoundException($kode);
+								case 5:
+									throw new SubkegiatanNotFoundException($kode);
+							}
+						}
+					}
+
+					if (isset($intoEntities[$kode])) {
+						switch ($i) {
 							case 1:
-								throw new UrusanNotFoundException($checkID);
+								throw new UrusanExistsException($kode);
 							case 2:
-								throw new BidangNotFoundException($checkID);
+								throw new BidangExistsException($kode);
 							case 3:
-								throw new ProgramNotFoundException($checkID);
+								throw new ProgramExistsException($kode);
 							case 4:
-								throw new KegiatanNotFoundException($checkID);
+								throw new KegiatanExistsException($kode);
 							case 5:
-								throw new SubkegiatanNotFoundException($checkID);
+								throw new SubkegiatanExistsException($kode);
 						}
 					}
 				}
 
-				$logEntity = $entity->log();
+				$intoEntities[$intoEntity->kode] = $intoEntity;
+
+				$logEntity = $intoEntity->log();
 				$logEntity->loggedAt = $this->penetapan;
 				$logEntity->loggedBy = $this->referensi;
+				$logEntities[] = $logEntity;
 
-				$cacheID[] = $entity->kode;
-				$this->repository->save($entity);
-				$this->logRepository->save($logEntity);
+				if (isset($nextRowNum)) $rowNum = max($rowNum, $nextRowNum - 1);
 			}
+
+			foreach ($intoEntities as $entity) $this->repository->save($entity);
+			foreach ($logEntities as $entity) $this->logRepository->save($entity);
+
 			$this->connection->commit();
 		} catch (\Throwable $exception) {
 			$this->connection->rollBack();
-			if (isset($entity)) {
+			if ($entity = $entity ?? $intoEntity ?? false) {
+				echo PHP_EOL;
 				echo "kode : " . $entity->kode . PHP_EOL;
 				echo "nama : " . $entity->nama . PHP_EOL;
-				echo "len-nama : " . ($entity->nama === null ? 0 : strlen($entity->nama)) . PHP_EOL;
-				echo "len-keterangan : " . ($entity->keterangan === null ? 0 : strlen($entity->keterangan)) . PHP_EOL;
+				echo PHP_EOL;
 			}
 			throw $exception;
 		}
